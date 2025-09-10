@@ -19,11 +19,11 @@ try:
     ACCESS_TOKEN_SECRET = config.ACCESS_TOKEN_SECRET
     BEARER_TOKEN = config.BEARER_TOKEN
 except ImportError:
-API_KEY = os.getenv("2jkTcTMXlCHvV0uBtXeljMIOg")
-API_SECRET = os.getenv("DcQwT8E8AWVibUMqGmJbfVtwdAhLoPUW1odTxFurClYl3gjZKy")
-ACCESS_TOKEN = os.getenv("1937648923667275776-FH63fObei7SioRmRLUy3WKs8IQi0RR")
-ACCESS_TOKEN_SECRET = os.getenv("fN1i6hnsJkab3eTzxoA9CqE1JSMEs8zCaQumxzuy4VBVa")
-BEARER_TOKEN = os.getenv("AAAAAAAAAAAAAAAAAAAAAN0y4AEAAAAABPDOTP%2BqaJV%2F6BaWvCyNMEqsITw%3DuTjvbybelmGAIjaHfSgfjcdSeOLFG3BlnevW3S2akq2pR7ghoQ")
+    API_KEY = os.getenv("API_KEY", "your_api_key")
+    API_SECRET = os.getenv("API_SECRET", "your_api_secret")
+    ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "your_access_token")
+    ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET", "your_access_token_secret")
+    BEARER_TOKEN = os.getenv("BEARER_TOKEN", "your_bearer_token")
 
 # Authenticate with X API v2
 try:
@@ -218,51 +218,40 @@ def tweet_starship_elon(post):
         logging.error(f"Error tweeting Starship Elon update: {e}")
 
 def main():
-    # Rationing: Run every 60 minutes (24 runs/day)
-    # Starlink: 10 reads (2 writes)
-    # Daily launch: 1 write (2 reads)
-    # Livestream: 1 write (2 reads)
-    # End-of-day: 1 write (2 reads)
-    # Starship: 8 reads (9 writes, including 2 Elon)
-    cycle_count = 0
-    while True:
-        now = datetime.now(timezone.utc)
-        
-        # Starlink updates (10 reads/day, 2 writes)
-        if cycle_count % 4 == 0:  # Every 4 hours, 6 times/day
-            posts = search_starlink_updates()
-            if posts:
-                for post in posts[:2]:  # 2 writes
-                    tweet_starlink_update(post)
-        
-        # Daily launch summary at 1am GMT (1 write, 2 reads)
-        if now.hour == 1 and now.minute == 0:
-            launches = get_spacex_launches("upcoming")
-            tweet_daily_launches(launches)
-        
-        # Livestream starting (1 write, 2 reads; assume 1-2 launches/day)
-        if now.hour in [0, 6, 12, 18]:  # Check at midnight, 6am, noon, 6pm UTC
-            tweet_livestream_start()
-        
-        # End-of-day summary at 11:59 (1 write, 2 reads)
-        if now.hour == 23 and now.minute == 59:
-            tweet_end_of_day_summary()
-        
-        # Starship stuff (8 reads, 9 writes; 2 Elon)
-        if cycle_count % 3 == 0:  # Every 3 hours, 8 times/day
-            # General Starship (6 reads, 7 writes)
-            starship_posts = search_starship_elon()  # Re-use for general
-            for post in starship_posts[:7]:  # 7 writes
-                tweet_starship_elon(post)
-        
-        # Extra Elon Starship (2 reads, 2 writes; every 12 hours)
-        if cycle_count % 12 == 0:  # 2 times/day
-            elon_posts = search_starship_elon()
-            for post in elon_posts[:2]:
-                tweet_starship_elon(post)
-        
-        cycle_count += 1
-        time.sleep(3600)  # Every 60 minutes
+    now = datetime.now(timezone.utc)
+    
+    # Starlink updates (10 reads/day, 2 writes; every 4 hours, 6 times/day)
+    if now.hour % 4 == 0:  # Approximate; adjust as needed
+        posts = search_starlink_updates()
+        if posts:
+            for post in posts[:2]:  # 2 writes
+                tweet_starlink_update(post)
+    
+    # Daily launch summary at 1am GMT (1 write, 2 reads)
+    if now.hour == 1:
+        launches = get_spacex_launches("upcoming")
+        tweet_daily_launches(launches)
+    
+    # Livestream starting (1 write, 2 reads; check 4 times/day)
+    if now.hour in [0, 6, 12, 18]:
+        tweet_livestream_start()
+    
+    # End-of-day summary at 11:59 (1 write, 2 reads)
+    if now.hour == 23:
+        tweet_end_of_day_summary()
+    
+    # Starship stuff (8 reads, 9 writes; every 3 hours, 8 times/day)
+    if now.hour % 3 == 0:
+        starship_posts = search_starship_elon()  # Re-use for general
+        for post in starship_posts[:7]:  # 7 writes
+            tweet_starship_elon(post)
+    
+    # Extra Elon Starship (2 reads, 2 writes; every 12 hours)
+    if now.hour % 12 == 0:
+        elon_posts = search_starship_elon()
+        for post in elon_posts[:2]:
+            tweet_starship_elon(post)
 
 if __name__ == "__main__":
     main()
+
