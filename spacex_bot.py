@@ -139,41 +139,5 @@ def main():
     
     # Starlink updates (10 reads/day, 2 writes; every 4 hours, 6 times/day)
     if now.hour % 4 == 0:
-        posts = search_starlink_updates()
-        if posts:
-            for post in posts[:2]:  # 2 writes
-                tweet_starlink_update(post)
-    
-    # Daily launch summary at 1am GMT (1 write, 2 reads)
-    if now.hour == 1:
-        launches = get_spacex_launches("upcoming")
-        tweet_daily_launches(launches)
-    
-    # Livestream starting (1 write, 2 reads; 4 times/day)
-    if now.hour in [0, 6, 12, 18]:
-        launches = get_spacex_launches("upcoming")
-        if launches:
-            tweet_launch(launches[0])  # 1 write
+        posts = search_star
 
-    # End-of-day summary at 11:59 (1 write, 2 reads)
-    if now.hour == 23:
-        launches = get_spacex_launches("upcoming")
-        if launches:
-            tweet_launch(launches[0])  # 1 write
-
-    # Starship stuff (8 reads, 9 writes; every 3 hours, 8 times/day)
-    if now.hour % 3 == 0:
-        starship_posts = search_starship_elon()  # 8 reads
-        if starship_posts:
-            for post in starship_posts[:7]:  # 7 writes
-                tweet_starship_elon(post)
-    
-    # Extra Elon Starship (2 reads, 2 writes; every 12 hours)
-    if now.hour % 12 == 0:
-        elon_posts = search_starship_elon()
-        if elon_posts:
-            for post in elon_posts[:2]:  # 2 writes
-                tweet_starship_elon(post)
-
-if __name__ == "__main__":
-    main()
