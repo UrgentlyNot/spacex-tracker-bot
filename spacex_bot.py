@@ -19,11 +19,11 @@ try:
     ACCESS_TOKEN_SECRET = config.ACCESS_TOKEN_SECRET
     BEARER_TOKEN = config.BEARER_TOKEN
 except ImportError:
-    API_KEY = os.getenv("API_KEY", "your_api_key")
-    API_SECRET = os.getenv("API_SECRET", "your_api_secret")
-    ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "your_access_token")
-    ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET", "your_access_token_secret")
-    BEARER_TOKEN = os.getenv("BEARER_TOKEN", "your_bearer_token")
+    API_KEY = os.getenv("API_KEY", "JGNAYKzIDTTxyzYhl4ulxSDZu")
+    API_SECRET = os.getenv("API_SECRET", "HfeOv9VS6ZHhyLA2CMRUcHQkUGSZ7V3cpNwyMBeXFMSowmsHkI")
+    ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "1937648923667275776-np09OcZicgxkbxGJVGIuT521UYDY4i")
+    ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET", "TL1x3uiOC0dLHP6mamJ60ISYu9leWErtJNVCMuHiodKgc")
+    BEARER_TOKEN = os.getenv("BEARER_TOKEN", "AAAAAAAAAAAAAAAAAAAAAN0y4AEAAAAApSzakcSFSTvWHLTaPnLHm1jj0%2FA%3DCPpIn3plIMj9QS2gPjsK1Hzxy0BtXh4feF4kc6OGFrERIcV0XK")
 
 # Authenticate with X API v2
 try:
@@ -254,4 +254,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
