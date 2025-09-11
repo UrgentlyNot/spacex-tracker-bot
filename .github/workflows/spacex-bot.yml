@@ -2,7 +2,7 @@ name: SpaceX Bot Automation
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Every hour (00 minutes past the hour)
+    - cron: '0,30 * * * *'  # Every hour (00 minutes past the hour)
   workflow_dispatch:  # Enables manual trigger
 
 jobs:
