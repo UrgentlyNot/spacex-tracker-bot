@@ -59,7 +59,7 @@ def save_json(file_path, data):
 def get_spacex_launches():
     url = "https://api.spacexdata.com/v4/launches/upcoming"
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
         logging.info(f"Fetched SpaceX upcoming launches")
@@ -78,7 +78,8 @@ def format_date(utc_date_str):
 
 def search_social_updates(account, query):
     try:
-        tweets = client.search_recent_tweets(query=query, max_results=10)
+        tweets = client.search_recent_tweets(query=query, max_results=10, timeout=10)
+        logging.info(f"Searched {account} with query: {query}, found {len(tweets.data or [])} posts")
         return tweets.data if tweets.data else []
     except tweepy.TweepyException as e:
         if e.response and e.response.status_code == 429:
@@ -151,10 +152,13 @@ def check_launch_window():
 
 def main():
     now = datetime.now(timezone.utc)
+    logging.info(f"Starting main loop at {now}")
     next_check = check_launch_window()
+    logging.info(f"Next check in {next_check} seconds (in_window: {load_json(LAUNCH_WINDOW_FILE).get('in_window', False)})")
 
     # Run every 30 minutes or 1 minute during launch window
     if now.second == 0:  # Align with minute boundary
+        logging.info("Processing updates at minute boundary")
         # SpaceX launch events
         spacex_posts = search_social_updates("SpaceX", 'from:SpaceX ("Watch Falcon 9 launch" OR "Liftoff of Falcon 9" OR "Falcon 9 launches" lang:en)')
         if spacex_posts:
@@ -177,7 +181,9 @@ def main():
                     tweet_update(post, category)
 
     # Schedule next run based on launch window
-    time.sleep(max(0, next_check - now.second))  # Wait until next interval
+    sleep_time = max(0, next_check - (now.second % next_check))
+    logging.info(f"Sleeping for {sleep_time} seconds until next check")
+    time.sleep(sleep_time)
 
 if __name__ == "__main__":
     while True:
