@@ -60,7 +60,19 @@ def search_spacex_launch_events():
     query = 'from:SpaceX ("Watch Falcon 9 launch" OR "Liftoff of Falcon 9" OR "Falcon 9 launches" lang:en)'
     try:
         tweets = client.search_recent_tweets(query=query, max_results=10)
-        return [tweet for tweet in (tweets.data or []) if datetime.fromisoformat(tweet.created_at.replace(tzinfo=timezone.utc)).date() == today]
+        if tweets.data:
+            valid_tweets = []
+            for tweet in tweets.data:
+                if tweet.created_at and hasattr(tweet.created_at, 'replace'):
+                    created_at = datetime.fromisoformat(tweet.created_at.replace(tzinfo=timezone.utc))
+                    if created_at.date() == today:
+                        valid_tweets.append(tweet)
+                    else:
+                        logging.info(f"Skipping tweet {tweet.id} from {created_at.date()} (not today)")
+                else:
+                    logging.warning(f"Skipping tweet {tweet.id} with invalid or missing created_at: {tweet.created_at}")
+            return valid_tweets
+        return []
     except tweepy.TweepyException as e:
         if e.response and e.response.status_code == 429:
             logging.error(f"Rate limit exceeded for launch event search: {e}. Waiting 15 minutes.")
