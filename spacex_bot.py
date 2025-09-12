@@ -35,9 +35,7 @@ except tweepy.TweepyException as e:
     exit()
 
 # File paths for tracking (prevent duplicates)
-TWEETED_LAUNCHES_FILE = "tweeted_launches.json"
 TWEETED_POSTS_FILE = "tweeted_x_posts.json"
-PAST_LAUNCHES_FILE = "past_launches.json"
 
 def load_json(file_path):
     if os.path.exists(file_path):
@@ -56,71 +54,48 @@ def save_json(file_path, data):
     except Exception as e:
         logging.error(f"Error saving JSON to {file_path}: {e}")
 
-def format_date(utc_date_str):
+def search_spacex_launch_events():
+    # Target specific phrases for today's launch events
+    today = datetime.now(timezone.utc).date()
+    query = 'from:SpaceX ("Watch Falcon 9 launch" OR "Liftoff of Falcon 9" OR "Falcon 9 launches" lang:en)'
     try:
-        dt = datetime.fromisoformat(utc_date_str.replace('Z', '+00:00'))
-        return dt.strftime("%b %d, %Y, %I:%M %p UTC")
-    except (ValueError, TypeError):
-        return "TBD"
-
-def get_spacex_launches(endpoint="upcoming"):
-    url = f"https://api.spacexdata.com/v4/launches/{endpoint}"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        logging.info(f"Fetched SpaceX {endpoint} launches")
-        return [data] if isinstance(data, dict) else data
-    except requests.RequestException as e:
-        logging.error(f"Error fetching SpaceX data: {e}")
-        print(f"Error fetching SpaceX data: {e}")
+        tweets = client.search_recent_tweets(query=query, max_results=10)
+        return [tweet for tweet in (tweets.data or []) if datetime.fromisoformat(tweet.created_at.replace(tzinfo=timezone.utc)).date() == today]
+    except tweepy.TweepyException as e:
+        if e.response and e.response.status_code == 429:
+            logging.error(f"Rate limit exceeded for launch event search: {e}. Waiting 15 minutes.")
+            time.sleep(900)
+            return []
+        logging.error(f"Error searching launch events: {e}")
         return []
 
-def tweet_launch(launch):
-    launch_id = launch.get("id")
-    tweeted_launches = load_json(TWEETED_LAUNCHES_FILE)
-    if launch_id in tweeted_launches:
-        print(f"Launch {launch_id} already tweeted.")
-        logging.info(f"Launch {launch_id} already tweeted")
+def tweet_launch_event(post):
+    post_id = str(post.id)
+    tweeted_posts = load_json(TWEETED_POSTS_FILE)
+    if post_id in tweeted_posts:
+        print(f"Post {post_id} already tweeted, skipping.")
+        logging.info(f"Post {post_id} already tweeted, skipping.")
         return
 
-    name = launch.get("name", "Unknown Mission")
-    date_utc = launch.get("date_utc", "TBD")
-    date = format_date(date_utc)
-    tweet = f"Upcoming SpaceX Launch: {name} on {date}"
+    text = post.text[:200] + "..." if len(post.text) > 200 else post.text
+    post_url = f"https://x.com/SpaceX/status/{post_id}"
+    tweet = f"SpaceX Update: {text} {post_url}"
+    if len(tweet) > 280:
+        text = post.text[:280 - len(post_url) - 25] + "..."
+        tweet = f"SpaceX Update: {text} {post_url}"
     try:
         client.create_tweet(text=tweet)
-        tweeted_launches.append(launch_id)
-        save_json(TWEETED_LAUNCHES_FILE, tweeted_launches)
-        print(f"Tweeted launch: {tweet}")
-        logging.info(f"Tweeted launch: {tweet}")
+        tweeted_posts.append(post_id)
+        save_json(TWEETED_POSTS_FILE, tweeted_posts)
+        print(f"Tweeted launch event: {tweet}")
+        logging.info(f"Tweeted launch event: {tweet}")
     except tweepy.TweepyException as e:
-        print(f"Error tweeting launch: {e}")
-        logging.error(f"Error tweeting launch: {e}")
-
-def tweet_daily_launches(launches):
-    if not launches:
-        return
-    tweeted_launches = load_json(TWEETED_LAUNCHES_FILE)
-    for launch in launches[:3]:  # Limit to 3 launches for brevity
-        launch_id = launch.get("id")
-        if launch_id not in tweeted_launches:
-            name = launch.get("name", "Unknown Mission")
-            date_utc = launch.get("date_utc", "TBD")
-            date = format_date(date_utc)
-            tweet = f"Daily Launch Update: {name} on {date}"
-            try:
-                client.create_tweet(text=tweet)
-                tweeted_launches.append(launch_id)
-                save_json(TWEETED_LAUNCHES_FILE, tweeted_launches)
-                print(f"Tweeted daily launch: {tweet}")
-                logging.info(f"Tweeted daily launch: {tweet}")
-            except tweepy.TweepyException as e:
-                print(f"Error tweeting daily launch: {e}")
-                logging.error(f"Error tweeting daily launch: {e}")
+        print(f"Error tweeting launch event: {e}")
+        logging.error(f"Error tweeting launch event: {e}")
 
 def search_starlink_updates():
-    query = "from:SpaceX (Starlink launch OR Starlink availability OR Starlink deployment)"
+    # Target Starlink posts twice daily
+    query = 'from:Starlink (launch OR availability OR deployment lang:en)'
     try:
         tweets = client.search_recent_tweets(query=query, max_results=10)
         return tweets.data if tweets.data else []
@@ -141,7 +116,7 @@ def tweet_starlink_update(post):
         return
 
     text = post.text[:200] + "..." if len(post.text) > 200 else post.text
-    post_url = f"https://x.com/SpaceX/status/{post_id}"
+    post_url = f"https://x.com/Starlink/status/{post_id}"
     tweet = f"Starlink Update: {text} {post_url}"
     if len(tweet) > 280:
         text = post.text[:280 - len(post_url) - 25] + "..."
@@ -157,7 +132,8 @@ def tweet_starlink_update(post):
         logging.error(f"Error tweeting Starlink update: {e}")
 
 def search_starship_elon():
-    query = "from:elonmusk (Starship OR rocket OR launch OR test) -filter:retweets"
+    # Target Elon Musk's Starship posts
+    query = 'from:elonmusk (Starship OR rocket OR launch OR test) -filter:retweets lang:en'
     try:
         tweets = client.search_recent_tweets(query=query, max_results=10)
         return tweets.data if tweets.data else []
@@ -196,38 +172,27 @@ def tweet_starship_elon(post):
 def main():
     now = datetime.now(timezone.utc)
     
-    # Starlink updates (10 reads/day, 2 writes; every 4 hours, 6 times/day)
-    if now.hour % 4 == 0:
-        posts = search_starlink_updates()
-        if posts:
-            for post in posts[:2]:  # 2 writes
+    # SpaceX launch events (checked hourly for today's posts)
+    launch_events = search_spacex_launch_events()
+    if launch_events:
+        for event in launch_events:
+            tweet_launch_event(event)
+    
+    # Starlink updates (2 writes/day, at 00:00 and 12:00 UTC)
+    if now.hour in [0, 12]:
+        starlink_posts = search_starlink_updates()
+        if starlink_posts:
+            for post in starlink_posts[:2]:  # 2 writes
                 tweet_starlink_update(post)
     
-    # Daily launch summary at 1am GMT (1 write, 2 reads)
-    if now.hour == 1 and now.minute == 0:  # Exact 1:00 UTC
-        launches = get_spacex_launches("upcoming")
-        tweet_daily_launches(launches)
-    
-    # Livestream starting (1 write, 2 reads; 4 times/day)
-    if now.hour in [0, 6, 12, 18]:
-        launches = get_spacex_launches("upcoming")
-        if launches:
-            tweet_launch(launches[0])  # 1 write
-
-    # End-of-day summary at 11:59 GMT (1 write, 2 reads)
-    if now.hour == 23 and now.minute == 59:  # Exact 23:59 UTC
-        launches = get_spacex_launches("upcoming")
-        if launches:
-            tweet_launch(launches[0])  # 1 write
-
-    # Starship updates (8 reads, 7 writes; every 3 hours, 8 times/day)
+    # Starship updates from Elon (7 writes every 3 hours, 8 times/day)
     if now.hour % 3 == 0:
         starship_posts = search_starship_elon()
         if starship_posts:
             for post in starship_posts[:7]:  # 7 writes
                 tweet_starship_elon(post)
     
-    # Extra Elon Starship (2 reads, 2 writes; every 12 hours)
+    # Extra Elon Starship updates (2 writes every 12 hours)
     if now.hour % 12 == 0:
         elon_posts = search_starship_elon()
         if elon_posts:
