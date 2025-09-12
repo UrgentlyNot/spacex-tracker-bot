@@ -11,6 +11,7 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # Kill job after 10 minutes if stuck
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
