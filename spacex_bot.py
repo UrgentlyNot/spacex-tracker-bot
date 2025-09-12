@@ -42,11 +42,12 @@ def load_json(file_path):
     if os.path.exists(file_path):
         try:
             with open(file_path, "r") as f:
-                return json.load(f)
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
         except json.JSONDecodeError:
-            logging.error(f"Corrupted JSON file: {file_path}. Resetting.")
-            return []
-    return []
+            logging.error(f"Corrupted JSON file: {file_path}. Resetting to empty dict.")
+            return {}
+    return {} if file_path == LAUNCH_WINDOW_FILE else []  # Default dict for launch_window, list for tweeted_posts
 
 def save_json(file_path, data):
     try:
@@ -133,7 +134,7 @@ def check_launch_window():
         if date_utc and abs((date_utc - now).total_seconds()) <= 3600:  # ±1 hour window
             in_window = True
             next_check = 60  # Switch to 1-minute checks
-            save_json(LAUNCH_WINDOW_FILE, {"in_window": True, "next_check": next_check})
+            save_json(LAUNCH_WINDOW_FILE, {"in_window": in_window, "next_check": next_check})
             logging.info(f"Entered launch window for {launch.get('name')} at {date_utc}")
             return next_check
 
@@ -142,7 +143,7 @@ def check_launch_window():
     if spacex_posts and any("payload deploy" in post.text.lower() or "mission success" in post.text.lower() for post in spacex_posts):
         in_window = False
         next_check = 1800  # Revert to 30 minutes
-        save_json(LAUNCH_WINDOW_FILE, {"in_window": False, "next_check": next_check})
+        save_json(LAUNCH_WINDOW_FILE, {"in_window": in_window, "next_check": next_check})
         logging.info("Payload deploy confirmed, exiting launch window")
 
     save_json(LAUNCH_WINDOW_FILE, {"in_window": in_window, "next_check": next_check})
