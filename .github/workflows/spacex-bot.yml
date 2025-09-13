@@ -23,7 +23,7 @@ jobs:
       - name: Check launch window and update schedule
         id: check-launch-window
         run: |
-          python -c "import datetime; import requests; data = requests.get('https://api.spacexdata.com/v4/launches/upcoming').json(); now = datetime.datetime.utcnow(); in_window = any(abs((datetime.datetime.fromisoformat(l['date_utc'].replace('Z', '+00:00')) - now).total_seconds()) <= 3600 for l in data); print(f'::set-output name=in_window::{in_window}')"
+          python -c "import datetime; import requests; from datetime import timezone; data = requests.get('https://api.spacexdata.com/v4/launches/upcoming').json(); now = datetime.datetime.now(timezone.utc); in_window = any(abs((datetime.datetime.fromisoformat(l['date_utc'].replace('Z', '+00:00')) - now).total_seconds()) <= 3600 for l in data); print(f'::set-output name=in_window::{in_window}')"
         shell: bash
       - name: Update workflow schedule
         if: steps.check-launch-window.outputs.in_window == 'True'
