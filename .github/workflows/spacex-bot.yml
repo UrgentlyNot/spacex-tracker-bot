@@ -6,12 +6,59 @@ on:
     branches:
       - main
   schedule:
-    - cron: '0 */1 * * *'  # Every hour to start the continuous loop
+    - cron: '0,30 * * * *'  # Every 30 minutes by default
 
 jobs:
+  update-schedule:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Check launch window and update schedule
+        run: |
+          python -c "import requests; data = requests.get('https://api.spacexdata.com/v4/launches/upcoming').json(); now = datetime.datetime.utcnow(); in_window = any(abs((datetime.datetime.fromisoformat(l['date_utc'].replace('Z', '+00:00')) - now).total_seconds()) <= 3600 for l in data); print(f'::set-output name=in_window::{in_window}')"
+        shell: bash
+      - name: Update workflow schedule
+        if: steps.check-launch-window.outputs.in_window == 'True'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs').promises;
+            const workflow = await fs.readFile('.github/workflows/spacex-bot.yml', 'utf8');
+            const updated = workflow.replace('0,30 * * * *', '*/1 * * * *'); // Switch to 1-minute intervals
+            await fs.writeFile('.github/workflows/spacex-bot.yml', updated);
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'spacex-bot.yml',
+              ref: 'main'
+            });
+      - name: Revert schedule if no launch window
+        if: steps.check-launch-window.outputs.in_window == 'False'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs').promises;
+            const workflow = await fs.readFile('.github/workflows/spacex-bot.yml', 'utf8');
+            const reverted = workflow.replace('*/1 * * * *', '0,30 * * * *'); // Revert to 30 minutes
+            await fs.writeFile('.github/workflows/spacex-bot.yml', reverted);
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'spacex-bot.yml',
+              ref: 'main'
+            });
+
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # Kill job after 10 minutes if stuck
+    timeout-minutes: 10
+    needs: update-schedule
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
