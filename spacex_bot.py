@@ -32,7 +32,7 @@ try:
 except tweepy.TweepyException as e:
     logging.error(f"X API v2 authentication failed: {e}")
     print(f"Authentication error: {e}")
-    exit()
+    exit(1)
 
 # File paths for tracking
 TWEETED_POSTS_FILE = "tweeted_x_posts.json"
@@ -123,7 +123,7 @@ def tweet_update(post, category):
         print(f"Error tweeting: {e}")
         logging.error(f"Error tweeting: {e}")
 
-def check_launch_window():
+def update_launch_window_schedule():
     launches = get_spacex_launches()
     now = datetime.now(timezone.utc)
     launch_window = load_json(LAUNCH_WINDOW_FILE)
@@ -151,40 +151,31 @@ def check_launch_window():
     return next_check
 
 def main():
-    now = datetime.now(timezone.utc)
-    logging.info(f"Starting main loop at {now}")
-    next_check = check_launch_window()
-    logging.info(f"Next check in {next_check} seconds (in_window: {load_json(LAUNCH_WINDOW_FILE).get('in_window', False)})")
+    logging.info(f"Starting script execution at {datetime.now(timezone.utc)}")
+    next_check = update_launch_window_schedule()
+    logging.info(f"Next check interval set to {next_check} seconds")
 
-    # Run every 30 minutes or 1 minute during launch window
-    if now.second == 0:  # Align with minute boundary
-        logging.info("Processing updates at minute boundary")
-        # SpaceX launch events
-        spacex_posts = search_social_updates("SpaceX", 'from:SpaceX ("Watch Falcon 9 launch" OR "Liftoff of Falcon 9" OR "Falcon 9 launches" lang:en)')
-        if spacex_posts:
-            for post in spacex_posts:
-                tweet_update(post, "SpaceX Update")
+    # Process updates
+    spacex_posts = search_social_updates("SpaceX", 'from:SpaceX ("Watch Falcon 9 launch" OR "Liftoff of Falcon 9" OR "Falcon 9 launches" lang:en)')
+    if spacex_posts:
+        for post in spacex_posts:
+            tweet_update(post, "SpaceX Update")
 
-        # Starlink updates (twice daily at 00:00 and 12:00 UTC)
-        if now.hour in [0, 12]:
-            starlink_posts = search_social_updates("Starlink", 'from:Starlink (launch OR availability OR deployment lang:en)')
-            if starlink_posts:
-                for post in starlink_posts[:2]:  # 2 writes
-                    tweet_update(post, "Starlink Update from Starlink")
+    if datetime.now(timezone.utc).hour in [0, 12]:  # Twice daily at 00:00 and 12:00 UTC
+        starlink_posts = search_social_updates("Starlink", 'from:Starlink (launch OR availability OR deployment lang:en)')
+        if starlink_posts:
+            for post in starlink_posts[:2]:  # 2 writes
+                tweet_update(post, "Starlink Update from Starlink")
 
-        # Elon Musk updates
-        elon_posts = search_social_updates("Elon", 'from:elonmusk -filter:retweets lang:en')
-        if elon_posts:
-            for post in elon_posts:
-                category = categorize_elon_post(post.text)
-                if category:
-                    tweet_update(post, category)
+    elon_posts = search_social_updates("Elon", 'from:elonmusk -filter:retweets lang:en')
+    if elon_posts:
+        for post in elon_posts:
+            category = categorize_elon_post(post.text)
+            if category:
+                tweet_update(post, category)
 
-    # Schedule next run based on launch window
-    sleep_time = max(0, next_check - (now.second % next_check))
-    logging.info(f"Sleeping for {sleep_time} seconds until next check")
-    time.sleep(sleep_time)
+    logging.info("Script execution completed")
+    return 0  # Exit successfully
 
 if __name__ == "__main__":
-    while True:
-        main()
+    exit(main())
