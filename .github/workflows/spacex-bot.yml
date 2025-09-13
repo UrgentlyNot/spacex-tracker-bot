@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '0,30 * * * *'  # Every 30 minutes by default
 
+permissions:
+  actions: write  # Grant write access to actions for workflow dispatch
+  contents: read  # Required for checkout and file operations
+
 jobs:
   update-schedule:
     runs-on: ubuntu-latest
