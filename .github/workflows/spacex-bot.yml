@@ -6,10 +6,10 @@ on:
     branches:
       - main
   schedule:
-    - cron: '0,30 * * * *'  # Every 30 minutes by default
+    - cron: '0,30 * * * *'  # Every 30 minutes by default (to be updated dynamically)
 
 permissions:
-  actions: write  # Grant write access to actions for workflow dispatch
+  actions: write  # Grant write access to actions for workflow dispatch (though we'll remove dispatch)
   contents: read  # Required for checkout and file operations
 
 jobs:
@@ -31,34 +31,12 @@ jobs:
         shell: bash
       - name: Update workflow schedule
         if: steps.check-launch-window.outputs.in_window == 'True'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const fs = require('fs').promises;
-            const workflow = await fs.readFile('.github/workflows/spacex-bot.yml', 'utf8');
-            const updated = workflow.replace('0,30 * * * *', '*/1 * * * *'); // Switch to 1-minute intervals
-            await fs.writeFile('.github/workflows/spacex-bot.yml', updated);
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'spacex-bot.yml',
-              ref: 'main'
-            });
+        run: |
+          sed -i 's/0,30 * * * */*/1 * * * */g' .github/workflows/spacex-bot.yml
       - name: Revert schedule if no launch window
         if: steps.check-launch-window.outputs.in_window == 'False'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const fs = require('fs').promises;
-            const workflow = await fs.readFile('.github/workflows/spacex-bot.yml', 'utf8');
-            const reverted = workflow.replace('*/1 * * * *', '0,30 * * * *'); // Revert to 30 minutes
-            await fs.writeFile('.github/workflows/spacex-bot.yml', reverted);
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'spacex-bot.yml',
-              ref: 'main'
-            });
+        run: |
+          sed -i 's/*/1 * * * */0,30 * * * */g' .github/workflows/spacex-bot.yml
 
   run-bot:
     runs-on: ubuntu-latest
