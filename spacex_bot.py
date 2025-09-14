@@ -3,7 +3,7 @@ import requests
 import json
 import os
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 # Set up logging
 logging.basicConfig(filename="spacex_bot.log", level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -54,33 +54,23 @@ def save_json(file_path, data):
         logging.error(f"Error saving JSON to {file_path}: {e}")
 
 def search_spacex_launch_events():
-    # Target specific phrases for today's launch events
-    today = datetime.now(timezone.utc).date()
     query = 'from:SpaceX ("Watch Falcon 9 launch" OR "Livestream starts" OR "Watch live" OR "Live now" OR "Liftoff of Falcon 9" OR "Falcon 9 launches" lang:en)'
     try:
         tweets = client.search_recent_tweets(query=query, max_results=10)
         if tweets.data:
-            valid_tweets = []
             for tweet in tweets.data:
-                if tweet.created_at:
-                    created_at = datetime.fromisoformat(tweet.created_at.replace(tzinfo=timezone.utc))
-                    if created_at.date() == today:
-                        valid_tweets.append(tweet)
-                    else:
-                        logging.info(f"Skipping tweet {tweet.id} from {created_at.date()} (not today)")
-                else:
-                    logging.warning(f"Skipping tweet {tweet.id} with missing created_at")
-            logging.info(f"Found {len(valid_tweets)} launch events for today")
-            return valid_tweets
-        return []
+                if any(phrase in tweet.text.lower() for phrase in ["livestream starts", "watch live", "live now"]):
+                    logging.info(f"Livestream detected in tweet {tweet.id}: {tweet.text}")
+                    tweet_livestream_notification(tweet)
+        return tweets.data if tweets.data else []
     except tweepy.TweepyException as e:
         if e.response and e.response.status_code == 429:
-            logging.error(f"Rate limit exceeded for launch event search: {e}. Skipping this run.")
+            logging.error(f"Rate limit exceeded for launch event search: {e}")
             return []
         logging.error(f"Error searching launch events: {e}")
         return []
 
-def tweet_launch_event(post):
+def tweet_livestream_notification(post):
     post_id = str(post.id)
     tweeted_posts = load_json(TWEETED_POSTS_FILE)
     if post_id in tweeted_posts:
@@ -90,30 +80,28 @@ def tweet_launch_event(post):
 
     text = post.text[:200] + "..." if len(post.text) > 200 else post.text
     post_url = f"https://x.com/SpaceX/status/{post_id}"
-    tweet = f"SpaceX Update: {text} {post_url}"
+    tweet = f"SpaceX Livestream Alert: {text} {post_url}"
     if len(tweet) > 280:
         text = post.text[:280 - len(post_url) - 25] + "..."
-        tweet = f"SpaceX Update: {text} {post_url}"
+        tweet = f"SpaceX Livestream Alert: {text} {post_url}"
     try:
         client.create_tweet(text=tweet)
         tweeted_posts.append(post_id)
         save_json(TWEETED_POSTS_FILE, tweeted_posts)
-        print(f"Tweeted launch event: {tweet}")
-        logging.info(f"Tweeted launch event: {tweet}")
+        print(f"Tweeted livestream alert: {tweet}")
+        logging.info(f"Tweeted livestream alert: {tweet}")
     except tweepy.TweepyException as e:
-        print(f"Error tweeting launch event: {e}")
-        logging.error(f"Error tweeting launch event: {e}")
+        print(f"Error tweeting livestream alert: {e}")
+        logging.error(f"Error tweeting livestream alert: {e}")
 
 def search_starlink_updates():
-    # Target Starlink posts twice daily
     query = 'from:Starlink (launch OR availability OR deployment lang:en)'
     try:
         tweets = client.search_recent_tweets(query=query, max_results=10)
-        logging.info(f"Found {len(tweets.data or [])} Starlink posts")
         return tweets.data if tweets.data else []
     except tweepy.TweepyException as e:
         if e.response and e.response.status_code == 429:
-            logging.error(f"Rate limit exceeded for Starlink search: {e}. Skipping this run.")
+            logging.error(f"Rate limit exceeded for Starlink search: {e}")
             return []
         logging.error(f"Error searching Starlink updates: {e}")
         return []
@@ -143,15 +131,13 @@ def tweet_starlink_update(post):
         logging.error(f"Error tweeting Starlink update: {e}")
 
 def search_starship_elon():
-    # Target Elon Musk's Starship posts
     query = 'from:elonmusk (Starship OR rocket OR launch OR test) -filter:retweets lang:en'
     try:
         tweets = client.search_recent_tweets(query=query, max_results=10)
-        logging.info(f"Found {len(tweets.data or [])} Starship Elon posts")
         return tweets.data if tweets.data else []
     except tweepy.TweepyException as e:
         if e.response and e.response.status_code == 429:
-            logging.error(f"Rate limit exceeded for Starship Elon search: {e}. Skipping this run.")
+            logging.error(f"Rate limit exceeded for Starship Elon search: {e}")
             return []
         logging.error(f"Error searching Starship Elon: {e}")
         return []
@@ -181,30 +167,38 @@ def tweet_starship_elon(post):
         logging.error(f"Error tweeting Starship Elon update: {e}")
 
 def main():
-    logging.info(f"Starting script execution at {datetime.now(timezone.utc)}")
-    
-    # SpaceX launch events (checked every run)
-    spacex_posts = search_social_updates("SpaceX", 'from:SpaceX ("Watch Falcon 9 launch" OR "Livestream starts" OR "Watch live" OR "Live now" OR "Liftoff of Falcon 9" OR "Falcon 9 launches" lang:en)')
+    now = datetime.now(timezone.utc)
+    logging.info(f"Starting script execution at {now}")
+
+    # SpaceX launch events (including livestream detection)
+    spacex_posts = search_spacex_launch_events()
     if spacex_posts:
         for post in spacex_posts:
-            tweet_update(post, "SpaceX Update")
+            tweet_launch_event(post)
 
     # Starlink updates (twice daily at 00:00 and 12:00 UTC)
-    if datetime.now(timezone.utc).hour in [0, 12]:
-        starlink_posts = search_social_updates("Starlink", 'from:Starlink (launch OR availability OR deployment lang:en)')
+    if now.hour in [0, 12]:
+        starlink_posts = search_starlink_updates()
         if starlink_posts:
             for post in starlink_posts[:2]:  # 2 writes
-                tweet_update(post, "Starlink Update from Starlink")
+                tweet_starlink_update(post)
 
-    # Elon Musk updates (checked every run, categorized)
-    elon_posts = search_social_updates("Elon", 'from:elonmusk -filter:retweets lang:en')
-    if elon_posts:
-        for post in elon_posts:
-            category = categorize_elon_post(post.text)
-            if category:
-                tweet_update(post, category)
+    # Starship updates from Elon (7 writes every 3 hours, 8 times/day)
+    if now.hour % 3 == 0:
+        starship_posts = search_starship_elon()
+        if starship_posts:
+            for post in starship_posts[:7]:  # 7 writes
+                tweet_starship_elon(post)
+
+    # Extra Elon Starship updates (2 writes every 12 hours)
+    if now.hour % 12 == 0:
+        elon_posts = search_starship_elon()
+        if elon_posts:
+            for post in elon_posts[:2]:  # 2 writes
+                tweet_starship_elon(post)
 
     logging.info("Script execution completed")
+    return 0  # Exit successfully
 
 if __name__ == "__main__":
-    main()
+    exit(main())
